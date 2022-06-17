@@ -15,86 +15,65 @@ from filterpy.monte_carlo import residual_resample
 # Constants
 ranges = [0, 256, 0, 256, 0, 256]
 epsilon = 0.000001
+mgwo_max_iter = 10
 
 def load_images_from_folder(folder):
-    images = []
-    filenames = []
-    for filename in sorted(os.listdir(folder)):
-        img = cv2.imread(os.path.join(folder,filename))
-        if img is not None:
-            images.append(img)
-            filenames.append(filename)
-    return images,filename
+  images = []
+  filenames = []
+  for filename in sorted(os.listdir(folder)):
+      img = cv2.imread(os.path.join(folder,filename))
+      if img is not None:
+          images.append(img)
+          filenames.append(filename)
+  return images,filename
 
 def create_uniform_particles(x_range, y_range, w_range, h_range, N):
-    particles = np.empty((N, 4))
-    particles[:, 0] = uniform(x_range[0], x_range[1], size=N)
-    particles[:, 1] = uniform(y_range[0], y_range[1], size=N)
-    particles[:, 2] = uniform(w_range[0], w_range[1], size=N)
-    particles[:, 3] = uniform(h_range[0], h_range[1], size=N)
-    return particles
+  particles = np.empty((N, 4))
+  particles[:, 0] = uniform(x_range[0], x_range[1], size=N)
+  particles[:, 1] = uniform(y_range[0], y_range[1], size=N)
+  particles[:, 2] = uniform(w_range[0], w_range[1], size=N)
+  particles[:, 3] = uniform(h_range[0], h_range[1], size=N)
+  return particles
 
 def create_gaussian_particles(mean, std, N):
-    particles = np.empty((N, 4))
-    particles[:, 0] = mean[0] + (randn(N) * std[0])
-    particles[:, 1] = mean[1] + (randn(N) * std[1])
-    particles[:, 2] = mean[2] + (randn(N) * std[2])
-    particles[:, 3] = mean[3] + (randn(N) * std[3])
-    return particles
+  particles = np.empty((N, 4))
+  particles[:, 0] = mean[0] + (randn(N) * std[0])
+  particles[:, 1] = mean[1] + (randn(N) * std[1])
+  particles[:, 2] = mean[2] + (randn(N) * std[2])
+  particles[:, 3] = mean[3] + (randn(N) * std[3])
+  return particles
 
-# def display_image(img, title='', size=None, show_axis=False, particles = None, weights = None):
-#     plt.gray()
-#     if not show_axis:
-#       plt.axis('off')
-#     if particles is not None:
-#       for particle in particles:
-#         cv2.rectangle(img,(particle[0]-particle[2], particle[1]-particle[3]),(particle[0]+particle[2]+1, particle[1]+particle[3]+1),(255,0,0),2)
-#     h = plt.imshow(img, interpolation='none')
-#     #plt.imshow(img, interpolation='none')
-#     if size:
-#       dpi = h.figure.get_dpi()/size
-#       h.figure.set_figwidth(img.shape[1] / dpi)
-#       h.figure.set_figheight(img.shape[0] / dpi)
-#       h.figure.canvas.resize(img.shape[1] + 1, img.shape[0] + 1)
-#       h.axes.set_position([0, 0, 1, 1])
-#       if show_axis:
-#           h.axes.set_xlim(-1, img.shape[1])
-#           h.axes.set_ylim(img.shape[0], -1)
-#     plt.grid(False)
-#     plt.title(title)  
-#     plt.show(block = False)
-#     plt.pause(0.4)
-#     #plt.draw()
+def create_clone_particles(initial,N,dim):
+  dim = initial.size
+  particles = np.tile(initial,(N,1))
+  return particles
 
-def get_histogram(frame, particle):
+def get_histogram(frame, particle, w_init, h_init):
   # Crop roi from image
-  # roi = frame[particle[1]:particle[1]+particle[3]+1,particle[0]:particle[0]+particle[2]+1,:]
+  s = particle[5]
+  w = w_init*s
+  h = w_init*s
   roi = frame[particle[1]:particle[1]+particle[3]+1,particle[0]:particle[0]+particle[2]+1,:]
   # Calculate histogram
   hist = cv2.calcHist([roi], [0, 1, 2], None, [8,8,8], ranges)
-  # If particle has invalid size, histgoram will be constant 0
-  # if np.sum(hist.flatten()) != 0:
   hist = hist.flatten() / (np.sum(hist.flatten()) + epsilon)
   return hist
-
 
 def predict(particles, std):
   # No motion model, only dispersion
   rng = np.random.default_rng()
   particles = rng.normal(particles, std)
   particles = particles.astype(int)
+
+
   return particles
 
 def update(frame, particles, weights, target_hist):
   for i,particle in enumerate(particles):
     particle_hist = get_histogram(frame,particle)
-    # if np.sum(particle_hist.flatten()) == 0:
-      # weights[i] = 1e-300
-    # else:
     weights[i] = cv2.compareHist(target_hist, particle_hist, cv2.HISTCMP_BHATTACHARYYA) #cv2.HISTCMP_INTERSECT) #cv2.HISTCMP_CHISQR) 
   weights = weights / np.sum(weights)
   return weights
-
 
 def estimate(particles, weights, tst):
   # State estimation by average of particles
@@ -141,7 +120,7 @@ def update_target(frame, state_estimate, target_hist, lmbd):
 def neff(weights):
   return 1. / np.sum(np.square(weights))
 
-def MGWO(N, frame, target_hist, particles = None, weights = np.array([5,1,4,2,3]), max_iter = 10):
+def MGWO(N, dim, frame, target_hist, particles = None, weights = np.array([5,1,4,2,3]), max_iter = 10):
   a = 2
   particles_new = np.empty((N, 4))
   weights_new = np.empty((N, 1))
@@ -199,31 +178,17 @@ def import_data(dataset):
 
   return images, filenames, gt  
 
-def run_pf(N, dataset,sensor_std_err=.1):
-  # Constants
-  sigma = [10,10,10,10]
-  mgwo_max_iter = 10
-
+def run_pf(N, dataset, sigma, velocity):
   images, filenames, gt = import_data(dataset)
-  initial_state = gt[0]
-
- 
-  # folder = 'D:/BME/ETSETB/Advanced_Signal_Processing/Project/video/2021_Barcelona_short_1280x720.mp4'
+  initial_state = np.array([g[0,0],velocity,g[0,1],velocity, 0, 1])
+  w_init = g[0,2]
+  h_init = g[0,3]
+  dim = initial_state.shape[1]
   
-  
- 
-  # cap = cv2.VideoCapture(folder)
-  # For every frame
-  #for filename in sorted(os.listdir(folder)):
-    # Read frame
-   # frame_bgr = cv2.imread(os.path.join(folder,filename))
-  
-  # index = 0
-  # while True:
-
   # Create particles and weights
   if initial_state is not None:
-    particles = create_gaussian_particles(mean = initial_state, std = [0,0,0,0], N = N)
+    # Create the same particles N times
+    particles = create_clone_particles(initial_state, N, dim)
   weights = np.ones(N) / N
 
   for index,frame_bgr in enumerate(images):
@@ -235,7 +200,7 @@ def run_pf(N, dataset,sensor_std_err=.1):
 
       # Create reference
       if index == 0:
-        target_hist = get_histogram(frame_rgb, initial_state)
+        target_hist = get_histogram(frame_rgb, initial_state, w_init, h_init)
         display_image(frame_rgb, index, size=1.0, particles = particles, weights = weights)
 
       # Move particles
@@ -245,48 +210,30 @@ def run_pf(N, dataset,sensor_std_err=.1):
       weights = update(frame_rgb, particles, weights, target_hist)
 
       # Apply Modified Gray Wolf Optimizer
-      # MGWO(N = N, frame = frame_rgb, target_hist = target_hist, particles = particles, weights = weights, max_iter = mgwo_max_iter)
+      MGWO(N = N, dim = dim, frame = frame_rgb, target_hist = target_hist, particles = particles, weights = weights, max_iter = mgwo_max_iter)
 
       # Estimate current state
       tst = np.array([[650,345,299,63],[650,345,299,63]])
       state_estimate = estimate(particles, weights, tst)
 
-      # Update target histogram
-      # tmp = target_hist
-      #target_hist = update_target(frame_rgb, state_estimate, target_hist, 0.05)
-
-
-      # plt.figure(2)
-      # plt.clf()
-      # plt.plot(tmp-target_hist)
-      # plt.title(index)
-      # plt.show()
-
-
-      #display_image(frame_rgb, index, size=1.0, particles = particles)
-      #plt.pause(0.4)
-  
-      # if neff(weights) < N/2:
       particles = resample(particles, weights, N)
 
       if index % 1 == 0:
         display_image(frame_rgb, index, size=1.0, particles = particles, weights = weights)
-      
-      #plt.pause(0.4)
-      #display(frame)
-      #frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-      #cv2_imshow(frame_rgb)
-      #print(filename)
-      index += 1
-  # cap.release()
-  # cv2.destroyAllWindows()
-      
 
-# run_pf(100, initial_state = car_init)
-# test1(500, initial_state = car_init)
+      index += 1
+
 
 dataset = 'BlurBody'
-run_pf(100, dataset)
+sigma_x = 1
+sigma_y = 1
+sigma_theta = 1
+sigma_s = 1
+velocity = 1
+
+# run_pf(100, dataset, sigma = [sigma_x,sigma_y,sigma_theta,sigma_s], velocity = velocity)
+asd = np.array([[1,2,3],[4,5,6]])
+print(asd.shape[0])
 
 
 
