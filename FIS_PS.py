@@ -50,14 +50,22 @@ def create_clone_particles(initial,N,dim):
 
 def get_histogram(frame, particle, w_init, h_init):
   # Crop roi from image
-  s = particle[5]
-  w = w_init*s
-  h = w_init*s
-  roi = frame[particle[1]:particle[1]+particle[3]+1,particle[0]:particle[0]+particle[2]+1,:]
+  x1,x2,y1,y2 = get_rectangle(particle,w_init,h_init)
+  roi = frame[y1:y2,x1:x2]
   # Calculate histogram
   hist = cv2.calcHist([roi], [0, 1, 2], None, [8,8,8], ranges)
   hist = hist.flatten() / (np.sum(hist.flatten()) + epsilon)
   return hist
+
+def get_rectangle(particle, w_init, h_init):
+  s = particle[5]
+  w = w_init*s
+  h = h_init*s
+  x1 = particle[0]-w/2
+  x2 = particle[0]+w/2
+  y1 = particle[2]-h/2
+  y2 = particle[2]+h/2
+  return x1,x2,y1,y2
 
 def predict(particles, std):
   # No motion model, only dispersion
@@ -180,9 +188,7 @@ def import_data(dataset):
 
 def run_pf(N, dataset, sigma, velocity):
   images, filenames, gt = import_data(dataset)
-  initial_state = np.array([g[0,0],velocity,g[0,1],velocity, 0, 1])
-  w_init = g[0,2]
-  h_init = g[0,3]
+  initial_state = np.array([gt[0,0]+g[0,2]/2,velocity,gt[0,1]+g[0,3]/2,velocity, 0, 1])
   dim = initial_state.shape[1]
   
   # Create particles and weights
