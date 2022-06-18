@@ -1,4 +1,3 @@
-@@ -1,116 +0,0 @@
 import cv2
 import numpy as np
 import matplotlib.pyplot as plt
@@ -7,23 +6,33 @@ def close_figure(event):
     if event.key == 'escape':
         exit()
 
+def get_rectangle(particle, w_init, h_init):
+  s = particle[5]
+  w = w_init*s
+  h = h_init*s
+  x1 = particle[0] - np.cos(particle[4])*w/2
+  x2 = particle[0] + np.cos(particle[4])*w/2
+  y1 = particle[2] - np.cos(particle[4])*h/2
+  y2 = particle[2] + np.cos(particle[4])*h/2
 
+  return x1.astype(int),x2.astype(int),y1.astype(int),y2.astype(int)
 
 # Function to display one image
-def display_image(img, title='', size=None, show_axis=False, particles = None, weights = None):
+def display_image(img, w_init, h_init, title='', size=None, show_axis=False, particles = None, weights = None):
     plt.gray()
     if not show_axis:
       plt.axis('off')
 
     plt.figure(1)
     if particles is not None:
-        particles = particles.astype(int)
-        if particles.shape == (4,):
+        if particles.shape == (6,):
             particle = particles
-            cv2.rectangle(img,(particle[0], particle[1]),(particle[0]+particle[2]+1, particle[1]+particle[3]+1),(255,0,0),2)
+            x1,x2,y1,y2 = get_rectangle(particle,w_init,h_init)
+            cv2.rectangle(img,(x1, y1),(x2, y2),(255,0,0),2)
         else:
             for i,particle in enumerate(particles):
-                cv2.rectangle(img,(particle[0], particle[1]),(particle[0]+particle[2]+1, particle[1]+particle[3]+1),(255,0,0),2)
+                x1,x2,y1,y2 = get_rectangle(particle,w_init,h_init)
+                cv2.rectangle(img,(x1, y1),(x2, y2),(255,0,0),2)
     h = plt.imshow(img, interpolation='none')
     if size:
         factor = 2

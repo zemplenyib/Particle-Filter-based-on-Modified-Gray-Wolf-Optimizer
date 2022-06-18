@@ -1,4 +1,3 @@
-@@ -1,49 +0,0 @@
 def iou(bb1, bb2):
     """
     Calculate the Intersection over Union (IoU) of two bounding boxes.
