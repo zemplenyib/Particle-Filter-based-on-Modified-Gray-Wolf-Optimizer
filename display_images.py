@@ -19,11 +19,12 @@ def get_rectangle(particle, w_init, h_init):
 
 # Function to display one image
 def display_image(img, w_init, h_init, title='', size=None, show_axis=False, particles = None, weights = None):
-    plt.gray()
+    # plt.gray()
     if not show_axis:
       plt.axis('off')
 
     plt.figure(1)
+    plt.clf()
     if particles is not None:
         if particles.shape == (6,):
             particle = particles

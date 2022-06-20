@@ -6,6 +6,7 @@ import seaborn as sns
 from glob import glob
 from numpy.random import uniform
 from numpy.random import randn
+from numpy.random import random
 from display_images import display_image
 from display_images import display_scatter
 from display_images import get_rectangle
@@ -17,7 +18,7 @@ from filterpy.monte_carlo import stratified_resample
 # Constants
 ranges = [0, 256, 0, 256, 0, 256]
 epsilon = 0.000001
-mgwo_max_iter = 10
+mgwo_max_iter = 1
 
 def load_images_from_folder(folder):
   images = []
@@ -64,7 +65,8 @@ def predict(particles, std, G = None, Q = None):
     rng = np.random.default_rng()
     for i,particle in enumerate(particles):
       mean = G.dot(particle)
-      particles[i] = rng.multivariate_normal(mean, Q)
+      # particles[i] = rng.multivariate_normal(mean, Q)
+      particles[i] = mean
   else:
     # No motion model, only dispersion
     rng = np.random.default_rng()
@@ -104,6 +106,7 @@ def estimate(particles, weights, tst):
   return state_avg
 
 def resample_from_index(particles, weights, indexes):
+    print(indexes)
     particles[:] = particles[indexes]
     weights.resize(len(particles))
     weights.fill (1.0 / len(weights))
@@ -123,14 +126,18 @@ def update_target(frame, state_estimate, target_hist, lmbd):
 def neff(weights):
   return 1. / np.sum(np.square(weights))
 
-def MGWO(N, dim, frame, target_hist, w_init, h_init, particles, weights, max_iter = 10):
+def MGWO(N, dim, frame, target_hist, w_init, h_init, particles, weights, sigma, max_iter = 10):
+  # print('MGWO0')
+  # print(particles)
+  # display_image(frame, w_init, h_init, 'MGWO0', size=1.0, particles = particles, weights = weights)
+  
   a = 2
   particles_new = np.empty((N, dim))
   weights_new = np.empty((N, 1))
 
   for t in range (max_iter):
-    r1 = 0.5 + randn(3,dim)*0.1
-    r2 = 0.5 + randn(3,dim)*0.1
+    r1 = 0.5 + randn(N,3,dim)*sigma
+    r2 = 0.5 + randn(N,3,dim)*sigma
 
     A = 2*a*r1-a
     C = 2*r2
@@ -141,22 +148,35 @@ def MGWO(N, dim, frame, target_hist, w_init, h_init, particles, weights, max_ite
     alpha = ind[2]
     beta = ind[1]
     delta = ind[0]
+    # print('weights')
+    # print(weights)
+    # print('alpha,beta,delta')
+    # print(alpha,beta,delta)
 
     X_alpha = particles[alpha]
     X_beta = particles[beta]
     X_delta = particles[delta]
+    # print('Xes')
+    # print(X_alpha,X_beta,X_delta)
 
 
     for i, particle in enumerate(particles):
-      D_alpha = np.absolute(C[0,:]*X_alpha - particle)
-      D_beta = np.absolute(C[1,:]*X_beta - particle)
-      D_delta = np.absolute(C[2,:]*X_delta - particle)
+      D_alpha = np.absolute(C[i,0,:]*X_alpha - particle)
+      D_beta = np.absolute(C[i,1,:]*X_beta - particle)
+      D_delta = np.absolute(C[i,2,:]*X_delta - particle)
+      # print('D')
+      # print(D_alpha,D_beta,D_delta)
 
-      X_1 = X_alpha - A[0,:]*D_alpha
-      X_2 = X_beta - A[1,:]*D_beta
-      X_3 = X_delta - A[2,:]*D_delta
+      X_1 = X_alpha - A[i,0,:]*D_alpha
+      X_2 = X_beta - A[i,1,:]*D_beta
+      X_3 = X_delta - A[i,2,:]*D_delta
+
+      # print('X')
+      # print(X_1,X_2,X_3)
 
       particles_new[i] = (X_1 + X_2 + X_3)/3
+    # print('new')
+    # print(particles_new)
     
     # Update particle if new solution is better
     weights_new = update(frame, particles_new, weights_new, target_hist, w_init, h_init)
@@ -207,6 +227,8 @@ def run_pf(N, dataset, sigma, velocity, T):
     particles = create_clone_particles(initial_state, N, dim)
   weights = np.ones(N) / N
 
+  # for i,frame_bgr in enumerate(images):
+    # images[i] = images[0]
   for index,frame_bgr in enumerate(images):
     if frame_bgr is not None:
       # Convert to rgb for display
@@ -222,39 +244,47 @@ def run_pf(N, dataset, sigma, velocity, T):
 
       # Move particles
       particles = predict(particles,sigma,G,Q)
+      # display_image(frame_rgb, w_init, h_init, 'predict', size=1.0, particles = particles, weights = weights)
+      # print('Predict')
+      # print(particles)
 
       # Evaluate particles and calculate weights
       weights = update(frame_rgb, particles, weights, target_hist, w_init, h_init)
 
-      display_image(frame_rgb, w_init, h_init, 'predict', size=1.0, particles = particles, weights = weights)
+      # display_image(frame_rgb, w_init, h_init, 'predict', size=1.0, particles = particles, weights = weights)
 
       # Apply Modified Gray Wolf Optimizer
-      MGWO(N = N, dim = dim, frame = frame_rgb, target_hist = target_hist, w_init = w_init, h_init = h_init, particles = particles, weights = weights, max_iter = mgwo_max_iter)
-      display_image(frame_rgb, w_init, h_init, 'MGWO', size=1.0, particles = particles, weights = weights)
+      MGWO(N = N, dim = dim, frame = frame_rgb, target_hist = target_hist, w_init = w_init, h_init = h_init, particles = particles, weights = weights, sigma = sigma[4], max_iter = mgwo_max_iter)
+      frame_rgb = cv2.cvtColor(frame_bgr,cv2.COLOR_BGR2RGB)
+      # display_image(frame_rgb, w_init, h_init, 'MGWO', size=1.0, particles = particles, weights = weights)
 
       # Estimate current state
       tst = np.array([[650,345,299,63],[650,345,299,63]])
       state_estimate = estimate(particles, weights, tst)
-      print(state_estimate)
+      # print(state_estimate)
       
 
       particles = resample(particles, weights, N)
+      # print('Resample')
+      # print(particles)
 
       if index % 1 == 0:
-        display_image(frame_rgb, w_init, h_init, 'resample', size=1.0, particles = particles, weights = weights)
-      
+        frame_rgb = cv2.cvtColor(frame_bgr,cv2.COLOR_BGR2RGB)
+        display_image(frame_rgb, w_init, h_init, 'resample', size=1.0, particles = state_estimate, weights = weights)
       index += 1
 
 
 dataset = 'Dog'
-sigma_x = 3
-sigma_y = 3
+sigma_x = 1
+sigma_y = 1
 sigma_theta = 0
 sigma_s = 0.0001
+sigma_mgwo = 0.01
 velocity = [1,1]
 # Frame rate?
 T = 1
-run_pf(100, dataset, sigma = [sigma_x,sigma_y,sigma_theta,sigma_s], velocity = velocity, T = T)
+# run_pf(100, dataset, sigma = [sigma_x,sigma_y,sigma_theta,sigma_s, sigma_mgwo], velocity = velocity, T = T)
 
+# resample: particles = particle[best]
 
 
