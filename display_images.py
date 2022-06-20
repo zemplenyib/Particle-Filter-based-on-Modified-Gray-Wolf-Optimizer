@@ -18,7 +18,7 @@ def get_rectangle(particle, w_init, h_init):
   return x1.astype(int),x2.astype(int),y1.astype(int),y2.astype(int)
 
 # Function to display one image
-def display_image(img, w_init, h_init, title='', size=None, show_axis=False, particles = None, weights = None):
+def display_image(img, w_init, h_init, title='', size=None, show_axis=False, particles = None, weights = None, t = None):
     # plt.gray()
     if not show_axis:
       plt.axis('off')
@@ -51,9 +51,13 @@ def display_image(img, w_init, h_init, title='', size=None, show_axis=False, par
             h.axes.set_ylim(img.shape[0], -1)
     plt.grid(False)
     plt.title(title)
-    plt.gcf().canvas.mpl_connect('key_press_event', close_figure)
-    plt.show(block = False)
-    plt.waitforbuttonpress()
+    if t is None:
+        plt.gcf().canvas.mpl_connect('key_press_event', close_figure)
+        plt.show(block = False)
+        plt.waitforbuttonpress()
+    else:
+        plt.show(block = False)
+        plt.pause(t)
 
 # Function to display 2 images side by side
 def display_images(ima1, ima2, title1='', title2='', size=None, show_axis=False, hsep=0.1):

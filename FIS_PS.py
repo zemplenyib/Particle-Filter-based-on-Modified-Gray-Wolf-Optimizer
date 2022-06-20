@@ -100,14 +100,14 @@ def predict(particles, std, G = None, Q = None):
 
 def update(frame, particles, weights, target_hist, w_init, h_init):
   for i,particle in enumerate(particles):
-    particle_hist = get_histogram(frame,particle, w_init, h_init, visualize = True)
-    weights[i] = cv2.compareHist(target_hist, particle_hist, cv2.HISTCMP_BHATTACHARYYA) #cv2.HISTCMP_INTERSECT) #cv2.HISTCMP_CHISQR)
-    print(weights[i])
-    fig, ax = plt.subplots(2)
-    ax[0].plot(target_hist)
-    ax[1].plot(particle_hist)
-    plt.title('in update')
-    plt.show()
+    particle_hist = get_histogram(frame,particle, w_init, h_init, visualize = False)
+    weights[i] = 1-cv2.compareHist(target_hist, particle_hist, cv2.HISTCMP_BHATTACHARYYA) #cv2.HISTCMP_INTERSECT) #cv2.HISTCMP_CHISQR)
+    # print(weights[i])
+    # fig, ax = plt.subplots(2)
+    # ax[0].plot(target_hist)
+    # ax[1].plot(particle_hist)
+    # plt.title('in update')
+    # plt.show()
     
 
   weights = weights / np.sum(weights)
@@ -311,17 +311,19 @@ def run_pf(N, dataset, sigma, velocity, T):
       # print(particles)
 
       if index % 1 == 0:
-        frame_rgb = cv2.cvtColor(frame_bgr,cv2.COLOR_BGR2RGB)
+        # frame_rgb = cv2.cvtColor(frame_bgr,cv2.COLOR_BGR2RGB)
         # display_image(frame_rgb, w_init, h_init, 'resample', size=1.0, particles = particles, weights = weights)
+        frame_rgb = cv2.cvtColor(frame_bgr,cv2.COLOR_BGR2RGB)
+        display_image(frame_rgb, w_init, h_init, 'estimate', size=1.0, particles = state_estimate, weights = weights, t = 0.1)
       index += 1
 
 
 dataset = 'BlurBody'
-sigma_x = 1
-sigma_y = 1
+sigma_x = 1.2
+sigma_y = 1.2
 sigma_theta = 0
 sigma_s = 0.0001
-sigma_mgwo = 0.01
+sigma_mgwo = 0.1
 velocity = [1,1]
 # Frame rate?
 T = 1
