@@ -285,11 +285,13 @@ def run_pf(N, dataset, sigma, velocity, T):
       # print(particles)
 
       # Evaluate particles and calculate weights
+      frame_rgb = cv2.cvtColor(frame_bgr,cv2.COLOR_BGR2RGB)
       weights = update(frame_rgb, particles, weights, target_hist, w_init, h_init)
 
       # display_image(frame_rgb, w_init, h_init, 'predict', size=1.0, particles = particles, weights = weights)
 
       # Apply Modified Gray Wolf Optimizer
+      frame_rgb = cv2.cvtColor(frame_bgr,cv2.COLOR_BGR2RGB)
       MGWO(N = N, dim = dim, frame = frame_rgb, target_hist = target_hist, w_init = w_init, h_init = h_init, particles = particles, weights = weights, sigma = sigma[4], max_iter = mgwo_max_iter)
       # frame_rgb = cv2.cvtColor(frame_bgr,cv2.COLOR_BGR2RGB)
       # display_image(frame_rgb, w_init, h_init, 'MGWO', size=1.0, particles = particles, weights = weights)
