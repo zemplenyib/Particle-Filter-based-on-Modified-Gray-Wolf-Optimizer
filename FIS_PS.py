@@ -51,13 +51,39 @@ def create_clone_particles(initial,N,dim):
   particles = np.tile(initial,(N,1))
   return particles
 
-def get_histogram(frame, particle, w_init, h_init):
-  # Crop roi from image
-  x1,x2,y1,y2 = get_rectangle(particle,w_init,h_init)
-  roi = frame[y1:y2,x1:x2]
+def get_histogram(frame, particle, w_init, h_init, visualize = False):
+  if particle is not None:
+    # Crop roi from image
+    x1,x2,y1,y2 = get_rectangle(particle,w_init,h_init)
+    roi = frame[y1:y2,x1:x2]
+    # fig, ax = plt.subplots()
+    # plt.imshow(roi)
+    # plt.show()
+  else:
+    roi = frame
+
   # Calculate histogram
   hist = cv2.calcHist([roi], [0, 1, 2], None, [8,8,8], ranges)
   hist = hist.flatten() / (np.sum(hist.flatten()) + epsilon)
+  if visualize:
+    fig, ax = plt.subplots()
+    plt.imshow(roi)
+    plt.show()
+    # histB = cv2.calcHist([roi],[2],None,[256],[0,256])
+    # histG = cv2.calcHist([roi],[1],None,[256],[0,256])
+    # histR = cv2.calcHist([roi],[0],None,[256],[0,256])
+    # fig, axs = plt.subplots(3)
+    # axs[0].plot(histB, color='b')
+    # axs[1].plot(histG, color='g')
+    # axs[2].plot(histR, color='r')
+    # plt.show()
+
+    # fig, ax = plt.subplots()
+    # plt.plot(hist)
+
+    # plt.show()
+
+
   return hist
 
 def predict(particles, std, G = None, Q = None):
@@ -65,8 +91,7 @@ def predict(particles, std, G = None, Q = None):
     rng = np.random.default_rng()
     for i,particle in enumerate(particles):
       mean = G.dot(particle)
-      # particles[i] = rng.multivariate_normal(mean, Q)
-      particles[i] = mean
+      particles[i] = rng.multivariate_normal(mean, Q)
   else:
     # No motion model, only dispersion
     rng = np.random.default_rng()
@@ -75,8 +100,16 @@ def predict(particles, std, G = None, Q = None):
 
 def update(frame, particles, weights, target_hist, w_init, h_init):
   for i,particle in enumerate(particles):
-    particle_hist = get_histogram(frame,particle, w_init, h_init)
-    weights[i] = cv2.compareHist(target_hist, particle_hist, cv2.HISTCMP_BHATTACHARYYA) #cv2.HISTCMP_INTERSECT) #cv2.HISTCMP_CHISQR) 
+    particle_hist = get_histogram(frame,particle, w_init, h_init, visualize = True)
+    weights[i] = cv2.compareHist(target_hist, particle_hist, cv2.HISTCMP_BHATTACHARYYA) #cv2.HISTCMP_INTERSECT) #cv2.HISTCMP_CHISQR)
+    print(weights[i])
+    fig, ax = plt.subplots(2)
+    ax[0].plot(target_hist)
+    ax[1].plot(particle_hist)
+    plt.title('in update')
+    plt.show()
+    
+
   weights = weights / np.sum(weights)
   return weights
 
@@ -106,7 +139,6 @@ def estimate(particles, weights, tst):
   return state_avg
 
 def resample_from_index(particles, weights, indexes):
-    print(indexes)
     particles[:] = particles[indexes]
     weights.resize(len(particles))
     weights.fill (1.0 / len(weights))
@@ -135,10 +167,15 @@ def MGWO(N, dim, frame, target_hist, w_init, h_init, particles, weights, sigma, 
   particles_new = np.empty((N, dim))
   weights_new = np.empty((N, 1))
 
+  # rng = np.random.default_rng()
+
   for t in range (max_iter):
     r1 = 0.5 + randn(N,3,dim)*sigma
     r2 = 0.5 + randn(N,3,dim)*sigma
-
+    # r1 = rng.random(N*3*dim)
+    # r2 = rng.random(N*3*dim)
+    # r1 = np.resize(r1,(N,3,dim))
+    # r2 = np.resize(r2,(N,3,dim))
     A = 2*a*r1-a
     C = 2*r2
     
@@ -239,7 +276,6 @@ def run_pf(N, dataset, sigma, velocity, T):
       # Create reference
       if index == 0:
         target_hist = get_histogram(frame_rgb, initial_state, w_init, h_init)
-
         display_image(frame_rgb, w_init, h_init, index, size=1.0, particles = particles, weights = weights)
 
       # Move particles
@@ -255,12 +291,16 @@ def run_pf(N, dataset, sigma, velocity, T):
 
       # Apply Modified Gray Wolf Optimizer
       MGWO(N = N, dim = dim, frame = frame_rgb, target_hist = target_hist, w_init = w_init, h_init = h_init, particles = particles, weights = weights, sigma = sigma[4], max_iter = mgwo_max_iter)
-      frame_rgb = cv2.cvtColor(frame_bgr,cv2.COLOR_BGR2RGB)
+      # frame_rgb = cv2.cvtColor(frame_bgr,cv2.COLOR_BGR2RGB)
       # display_image(frame_rgb, w_init, h_init, 'MGWO', size=1.0, particles = particles, weights = weights)
 
       # Estimate current state
       tst = np.array([[650,345,299,63],[650,345,299,63]])
       state_estimate = estimate(particles, weights, tst)
+
+      # frame_rgb = cv2.cvtColor(frame_bgr,cv2.COLOR_BGR2RGB)
+      # hist = get_histogram(frame_rgb,state_estimate, w_init, h_init, visualize = True)
+      # print(cv2.compareHist(target_hist, hist, cv2.HISTCMP_BHATTACHARYYA))
       # print(state_estimate)
       
 
@@ -270,11 +310,11 @@ def run_pf(N, dataset, sigma, velocity, T):
 
       if index % 1 == 0:
         frame_rgb = cv2.cvtColor(frame_bgr,cv2.COLOR_BGR2RGB)
-        display_image(frame_rgb, w_init, h_init, 'resample', size=1.0, particles = state_estimate, weights = weights)
+        # display_image(frame_rgb, w_init, h_init, 'resample', size=1.0, particles = particles, weights = weights)
       index += 1
 
 
-dataset = 'Dog'
+dataset = 'BlurBody'
 sigma_x = 1
 sigma_y = 1
 sigma_theta = 0
@@ -283,8 +323,14 @@ sigma_mgwo = 0.01
 velocity = [1,1]
 # Frame rate?
 T = 1
-# run_pf(100, dataset, sigma = [sigma_x,sigma_y,sigma_theta,sigma_s, sigma_mgwo], velocity = velocity, T = T)
+run_pf(100, dataset, sigma = [sigma_x,sigma_y,sigma_theta,sigma_s, sigma_mgwo], velocity = velocity, T = T)
 
 # resample: particles = particle[best]
 
-
+# HISTOGRAM TEST
+# img = cv2.imread('D:/BME/ETSETB/Advanced_Signal_Processing/Project/FIS_PS_new/Datasets/Solid_blue.png',cv2.IMREAD_COLOR)
+# img = cv2.cvtColor(img,cv2.COLOR_BGR2RGB)
+# get_histogram(img, None, 0, 0, visualize = True)
+# fig, ax = plt.subplots()
+# plt.imshow(img)
+# plt.show()
