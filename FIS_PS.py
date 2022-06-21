@@ -264,19 +264,21 @@ def run_pf(N, dataset, sigma, velocity, T):
     particles = create_clone_particles(initial_state, N, dim)
   weights = np.ones(N) / N
 
-  # for i,frame_bgr in enumerate(images):
-    # images[i] = images[0]
+  estimation = np.empty((len(images),dim))
+  frames_rgb = []
+
   for index,frame_bgr in enumerate(images):
     if frame_bgr is not None:
       # Convert to rgb for display
       frame_rgb = cv2.cvtColor(frame_bgr,cv2.COLOR_BGR2RGB)
+      frames_rgb.append(frame_rgb)
       # Convert to lab for histogram
       frame_lab = cv2.cvtColor(frame_bgr,cv2.COLOR_BGR2Lab)
 
       # Create reference
       if index == 0:
         target_hist = get_histogram(frame_rgb, initial_state, w_init, h_init)
-        display_image(frame_rgb, w_init, h_init, index, size=1.0, particles = particles, weights = weights)
+        # display_image(frame_rgb, w_init, h_init, index, size=1.0, particles = particles, weights = weights)
 
       # Move particles
       particles = predict(particles,sigma,G,Q)
@@ -299,6 +301,7 @@ def run_pf(N, dataset, sigma, velocity, T):
       # Estimate current state
       tst = np.array([[650,345,299,63],[650,345,299,63]])
       state_estimate = estimate(particles, weights, tst)
+      estimation[index,:] = state_estimate
 
       # frame_rgb = cv2.cvtColor(frame_bgr,cv2.COLOR_BGR2RGB)
       # hist = get_histogram(frame_rgb,state_estimate, w_init, h_init, visualize = True)
@@ -314,11 +317,14 @@ def run_pf(N, dataset, sigma, velocity, T):
         # frame_rgb = cv2.cvtColor(frame_bgr,cv2.COLOR_BGR2RGB)
         # display_image(frame_rgb, w_init, h_init, 'resample', size=1.0, particles = particles, weights = weights)
         frame_rgb = cv2.cvtColor(frame_bgr,cv2.COLOR_BGR2RGB)
-        display_image(frame_rgb, w_init, h_init, 'estimate', size=1.0, particles = state_estimate, weights = weights, t = 0.1)
+        # display_image(frame_rgb, w_init, h_init, 'estimate', size=1.0, particles = state_estimate, weights = weights, t = 0.1)
       index += 1
 
+  for index,frame_rgb in enumerate(frames_rgb):
+    display_image(frame_rgb, w_init, h_init, index, size=1.0, particles = estimation[index,:], t = 0.03)
 
-dataset = 'BlurBody'
+
+dataset = 'BlurOwl'
 sigma_x = 1.2
 sigma_y = 1.2
 sigma_theta = 0
