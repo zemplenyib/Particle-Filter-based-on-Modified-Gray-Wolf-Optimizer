@@ -113,7 +113,7 @@ def update(frame, particles, weights, target_hist, w_init, h_init):
   weights = weights / np.sum(weights)
   return weights
 
-def estimate(particles, weights, tst):
+def estimate(particles, weights, groundTruth, w_init, h_init):
   # State estimation by average of particles
   state_avg = np.sum(particles * weights[:,None], axis=0)
 
@@ -124,19 +124,21 @@ def estimate(particles, weights, tst):
   # print ('Highest weight: ', state_lw)
   # print ('True state:     ', tst[1,:])
 
-  # Bounding box of the true state
-  # bb_tst = {'x1':tst[1,0]-tst[1,2], 'y1':tst[1,1]-tst[1,3],'x2':tst[1,0]+tst[1,2], 'y2':tst[1,1]+tst[1,3]}
+  # Bounding box of the ground truth
+  bb_gt = {'x1':groundTruth[0]-groundTruth[2]/2, 'y1':groundTruth[1]-groundTruth[3]/2,'x2':groundTruth[0]+groundTruth[2]/2, 'y2':groundTruth[1]+groundTruth[3]/2}
   # Bounding box of the solution using the average
-  # bb_avg = {'x1':state_avg[0]-state_avg[2], 'y1':state_avg[1]-state_avg[3], 'x2':state_avg[0]+state_avg[2], 'y2':state_avg[1]+state_avg[3]}
+  x1,x2,y1,y2 = get_rectangle(state_avg,w_init,h_init)
+  bb_avg = {'x1':x1, 'y1':y1, 'x2':x2, 'y2':y2}
   # Bounding box of the solution using the largest weight
   # bb_lw  = {'x1':state_lw[0]-state_lw[2], 'y1':state_lw[1]-state_lw[3], 'x2':state_lw[0]+state_lw[2], 'y2':state_lw[1]+state_lw[3]}
 
   # Compute Intersection over Union to evaluate the solution. Higher values are 
   # better. IoU is bounded in [0,1]. In object detection an IoU >= 0.5 is usually 
   # considered a correct detection.
-  # print ('IOU avg  = {:.3f}'.format(iou(bb_tst, bb_avg)))
+  IOU_avg = iou(bb_gt, bb_avg)
+  # print ('IOU avg  = {:.3f}'.format(IOU_avg))
   # print ('IOU best = {:.3f}'.format(iou(bb_tst, bb_lw)))
-  return state_avg
+  return state_avg, IOU_avg
 
 def resample_from_index(particles, weights, indexes):
     particles[:] = particles[indexes]
@@ -266,6 +268,7 @@ def run_pf(N, dataset, sigma, velocity, T):
 
   estimation = np.empty((len(images),dim))
   frames_rgb = []
+  IOU_avg = []
 
   for index,frame_bgr in enumerate(images):
     if frame_bgr is not None:
@@ -299,8 +302,8 @@ def run_pf(N, dataset, sigma, velocity, T):
       # display_image(frame_rgb, w_init, h_init, 'MGWO', size=1.0, particles = particles, weights = weights)
 
       # Estimate current state
-      tst = np.array([[650,345,299,63],[650,345,299,63]])
-      state_estimate = estimate(particles, weights, tst)
+      state_estimate, IOU_avg_act = estimate(particles, weights, gt[index,:], w_init, h_init)
+      IOU_avg.append(IOU_avg_act)
       estimation[index,:] = state_estimate
 
       # frame_rgb = cv2.cvtColor(frame_bgr,cv2.COLOR_BGR2RGB)
@@ -320,11 +323,12 @@ def run_pf(N, dataset, sigma, velocity, T):
         # display_image(frame_rgb, w_init, h_init, 'estimate', size=1.0, particles = state_estimate, weights = weights, t = 0.1)
       index += 1
 
+  print('Average IOU = {:.3f}'.format(sum(IOU_avg)/len(IOU_avg)))
   for index,frame_rgb in enumerate(frames_rgb):
-    display_image(frame_rgb, w_init, h_init, index, size=1.0, particles = estimation[index,:], t = 0.03)
+    display_image(frame_rgb, w_init, h_init, 'IOU avg  = {:.3f}'.format(IOU_avg[index]), size=1.0, particles = estimation[index,:], t = 0.03)
 
 
-dataset = 'BlurOwl'
+dataset = 'BlurBody'
 sigma_x = 1.2
 sigma_y = 1.2
 sigma_theta = 0
