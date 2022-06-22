@@ -98,7 +98,7 @@ def predict(particles, std, G = None, Q = None):
     particles = rng.normal(particles, std)
   return particles
 
-def update(frame, particles, weights, target_hist, w_init, h_init):
+def update(frame, particles, weights, target_hist, w_init, h_init, normalize = 'True'):
   for i,particle in enumerate(particles):
     particle_hist = get_histogram(frame,particle, w_init, h_init, visualize = False)
     weights[i] = 1-cv2.compareHist(target_hist, particle_hist, cv2.HISTCMP_BHATTACHARYYA) #cv2.HISTCMP_INTERSECT) #cv2.HISTCMP_CHISQR)
@@ -109,8 +109,8 @@ def update(frame, particles, weights, target_hist, w_init, h_init):
     # plt.title('in update')
     # plt.show()
     
-
-  weights = weights / np.sum(weights + epsilon)
+  if normalize:
+    weights = weights / (np.sum(weights)+epsilon)
   return weights
 
 def estimate(particles, weights, groundTruth, w_init, h_init):
@@ -129,9 +129,14 @@ def estimate(particles, weights, groundTruth, w_init, h_init):
   # Bounding box of the solution using the average
   # print('state_avg:' + str(state_avg))
   x1,x2,y1,y2 = get_rectangle(state_avg,w_init,h_init)
-  bb_avg = {'x1':x1, 'y1':y1, 'x2':x2, 'y2':y2}
-  if x1 < 0:
-    print(state_avg)
+
+  
+  if x1 < x2:
+    bb_avg = {'x1':x1, 'y1':y1, 'x2':x2, 'y2':y2}
+  elif x1 > x2:
+    bb_avg = {'x1':x2, 'y1':y1, 'x2':x1, 'y2':y2}
+  else:
+    bb_avg = {'x1':x1, 'y1':y1, 'x2':x2+1, 'y2':y2}
   # Bounding box of the solution using the largest weight
   # bb_lw  = {'x1':state_lw[0]-state_lw[2], 'y1':state_lw[1]-state_lw[3], 'x2':state_lw[0]+state_lw[2], 'y2':state_lw[1]+state_lw[3]}
 
@@ -221,13 +226,16 @@ def MGWO(N, dim, frame, target_hist, w_init, h_init, particles, weights, sigma, 
     # print(particles_new)
     
     # Update particle if new solution is better
-    weights_new = update(frame, particles_new, weights_new, target_hist, w_init, h_init)
+    weights     = update(frame, particles, weights, target_hist, w_init, h_init, normalize = False)
+    weights_new = update(frame, particles_new, weights_new, target_hist, w_init, h_init, normalize = False)
     for i,(weight, weight_new) in enumerate(zip(weights, weights_new)):
       if weight_new > weight:
         particles[i] = particles_new[i]
         weights[i] = weights_new[i]
     # Update 'a' parameter
     a = 2 - 2*(np.sin(np.pi*t/max_iter/2))**2
+  weights = weights / (np.sum(weights)+epsilon)
+  return particles, weights
 
 def import_data(dataset):
   folder = 'Datasets/' + dataset + '/' + dataset
@@ -245,8 +253,8 @@ def import_data(dataset):
 def export_video(frames_rgb, estimation, dataset, w_init, h_init, iou):
   iou_old = 0
   for filename in os.listdir():
-    if filename[0:8] == dataset:
-      iou_old = float(filename[9:14])
+    if filename[0:len(dataset)] == dataset:
+      iou_old = float(filename[len(dataset)+1:len(dataset)+6])
   if float(iou) > iou_old:
     height,width,layers = frames_rgb[0].shape
     size = (width,height)
@@ -256,7 +264,8 @@ def export_video(frames_rgb, estimation, dataset, w_init, h_init, iou):
       cv2.rectangle(frame_rgb,(x1, y1),(x2, y2),(255,0,0),2)
       out.write(cv2.cvtColor(frame_rgb,cv2.COLOR_RGB2BGR))
     out.release()
-    os.remove(dataset + '_' + '{:.3f}'.format(iou_old) + '.avi')
+    if iou_old != 0:
+      os.remove(dataset + '_' + '{:.3f}'.format(iou_old) + '.avi')
 
 def run_pf(N, dataset, sigma, velocity, T):
   # Import images, ground truth
@@ -316,12 +325,9 @@ def run_pf(N, dataset, sigma, velocity, T):
       frame_rgb = cv2.cvtColor(frame_bgr,cv2.COLOR_BGR2RGB)
       weights = update(frame_rgb, particles, weights, target_hist, w_init, h_init)
 
-      # display_image(frame_rgb, w_init, h_init, 'predict', size=1.0, particles = particles, weights = weights)
-
       # Apply Modified Gray Wolf Optimizer
       frame_rgb = cv2.cvtColor(frame_bgr,cv2.COLOR_BGR2RGB)
-      MGWO(N = N, dim = dim, frame = frame_rgb, target_hist = target_hist, w_init = w_init, h_init = h_init, particles = particles, weights = weights, sigma = sigma[4], max_iter = mgwo_max_iter)
-      # frame_rgb = cv2.cvtColor(frame_bgr,cv2.COLOR_BGR2RGB)
+      particles, weights = MGWO(N = N, dim = dim, frame = frame_rgb, target_hist = target_hist, w_init = w_init, h_init = h_init, particles = particles, weights = weights, sigma = sigma[4], max_iter = mgwo_max_iter)
       # display_image(frame_rgb, w_init, h_init, 'MGWO', size=1.0, particles = particles, weights = weights)
 
       # Estimate current state
@@ -343,20 +349,20 @@ def run_pf(N, dataset, sigma, velocity, T):
         # frame_rgb = cv2.cvtColor(frame_bgr,cv2.COLOR_BGR2RGB)
         # display_image(frame_rgb, w_init, h_init, 'resample', size=1.0, particles = particles, weights = weights)
         frame_rgb = cv2.cvtColor(frame_bgr,cv2.COLOR_BGR2RGB)
-        # display_image(frame_rgb, w_init, h_init, 'estimate', size=1.0, particles = state_estimate, weights = weights, t = 0.0001)
+        # display_image(frame_rgb, w_init, h_init, 'estimate', size=1.0, particles = state_estimate, weights = weights)
       index += 1
 
 
   export_video(frames_rgb, estimation, dataset, w_init, h_init, '{:.3f}'.format(sum(IOU_avg)/len(IOU_avg)))
   print('Average IOU = {:.3f}'.format(sum(IOU_avg)/len(IOU_avg)))
   # for index,frame_rgb in enumerate(frames_rgb):
-    # display_image(frame_rgb, w_init, h_init, 'IOU avg  = {:.3f}'.format(IOU_avg[index]), size=1.0, particles = estimation[index,:], t = 0.03)
+    # display_image(frame_rgb, w_init, h_init, 'IOU avg  = {:.3f}'.format(IOU_avg[index]), size=1.0, particles = estimation[index,:])
 
 
-dataset = 'BlurBody'
-sigma_x = 1.2
-sigma_y = 1.2
-sigma_theta = 0
+dataset = 'Box'
+sigma_x = 1.4
+sigma_y = 1.4
+sigma_theta = 0 #2.5
 sigma_s = 0.0001
 sigma_mgwo = 0.1
 velocity = [1,1]

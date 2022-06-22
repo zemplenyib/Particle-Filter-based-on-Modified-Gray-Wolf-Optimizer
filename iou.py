@@ -20,7 +20,7 @@ def iou(bb1, bb2):
     """
     assert bb1['x1'] < bb1['x2']
     assert bb1['y1'] < bb1['y2']
-    assert bb2['x1'] < bb2['x2'], str(bb2['x1']) + ';' + str(bb2['x2'])
+    assert bb2['x1'] < bb2['x2']
     assert bb2['y1'] < bb2['y2']
 
     # print('groundTruth' + '\n' + 'x1:' + str(bb1['x1']) + '\n' + 'x2:' + str(bb1['x2']) + '\n' + 'y1:' + str(bb1['y1']) + '\n' + 'y2:' + str(bb1['y2']))
