@@ -320,12 +320,22 @@ def run_pf(N, dataset, sigma, velocity, T):
         # frame_rgb = cv2.cvtColor(frame_bgr,cv2.COLOR_BGR2RGB)
         # display_image(frame_rgb, w_init, h_init, 'resample', size=1.0, particles = particles, weights = weights)
         frame_rgb = cv2.cvtColor(frame_bgr,cv2.COLOR_BGR2RGB)
-        # display_image(frame_rgb, w_init, h_init, 'estimate', size=1.0, particles = state_estimate, weights = weights, t = 0.1)
+        # display_image(frame_rgb, w_init, h_init, 'estimate', size=1.0, particles = state_estimate, weights = weights, t = 0.0001)
       index += 1
 
+  # Export video 
+  height,width,layers = frames_rgb[0].shape
+  size = (width,height)
+  out = cv2.VideoWriter(dataset+'.avi',cv2.VideoWriter_fourcc(*'DIVX'),15,size)
+  for frame_rgb,particle in zip(frames_rgb,estimation):
+    x1,x2,y1,y2 = get_rectangle(particle,w_init,h_init)
+    cv2.rectangle(frame_rgb,(x1, y1),(x2, y2),(255,0,0),2)
+    out.write(cv2.cvtColor(frame_rgb,cv2.COLOR_RGB2BGR))
+  out.release()
+
   print('Average IOU = {:.3f}'.format(sum(IOU_avg)/len(IOU_avg)))
-  for index,frame_rgb in enumerate(frames_rgb):
-    display_image(frame_rgb, w_init, h_init, 'IOU avg  = {:.3f}'.format(IOU_avg[index]), size=1.0, particles = estimation[index,:], t = 0.03)
+  # for index,frame_rgb in enumerate(frames_rgb):
+    # display_image(frame_rgb, w_init, h_init, 'IOU avg  = {:.3f}'.format(IOU_avg[index]), size=1.0, particles = estimation[index,:], t = 0.03)
 
 
 dataset = 'BlurBody'
