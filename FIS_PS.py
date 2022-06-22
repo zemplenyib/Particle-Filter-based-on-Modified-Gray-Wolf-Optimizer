@@ -110,7 +110,7 @@ def update(frame, particles, weights, target_hist, w_init, h_init):
     # plt.show()
     
 
-  weights = weights / np.sum(weights)
+  weights = weights / np.sum(weights + epsilon)
   return weights
 
 def estimate(particles, weights, groundTruth, w_init, h_init):
@@ -125,10 +125,13 @@ def estimate(particles, weights, groundTruth, w_init, h_init):
   # print ('True state:     ', tst[1,:])
 
   # Bounding box of the ground truth
-  bb_gt = {'x1':groundTruth[0]-groundTruth[2]/2, 'y1':groundTruth[1]-groundTruth[3]/2,'x2':groundTruth[0]+groundTruth[2]/2, 'y2':groundTruth[1]+groundTruth[3]/2}
+  bb_gt = {'x1':groundTruth[0], 'y1':groundTruth[1],'x2':groundTruth[0]+groundTruth[2], 'y2':groundTruth[1]+groundTruth[3]}
   # Bounding box of the solution using the average
+  # print('state_avg:' + str(state_avg))
   x1,x2,y1,y2 = get_rectangle(state_avg,w_init,h_init)
   bb_avg = {'x1':x1, 'y1':y1, 'x2':x2, 'y2':y2}
+  if x1 < 0:
+    print(state_avg)
   # Bounding box of the solution using the largest weight
   # bb_lw  = {'x1':state_lw[0]-state_lw[2], 'y1':state_lw[1]-state_lw[3], 'x2':state_lw[0]+state_lw[2], 'y2':state_lw[1]+state_lw[3]}
 
@@ -236,8 +239,24 @@ def import_data(dataset):
   with open(folder + '/groundtruth_rect.txt', 'r') as f:
     gt = [[int(x) for x in line.split()] for line in f]
   gt = np.array(gt)
+  return images, filenames, gt
 
-  return images, filenames, gt  
+# Export video
+def export_video(frames_rgb, estimation, dataset, w_init, h_init, iou):
+  iou_old = 0
+  for filename in os.listdir():
+    if filename[0:8] == dataset:
+      iou_old = float(filename[9:14])
+  if float(iou) > iou_old:
+    height,width,layers = frames_rgb[0].shape
+    size = (width,height)
+    out = cv2.VideoWriter(dataset+'_'+iou+'.avi',cv2.VideoWriter_fourcc(*'DIVX'),15,size)
+    for frame_rgb,particle in zip(frames_rgb,estimation):
+      x1,x2,y1,y2 = get_rectangle(particle,w_init,h_init)
+      cv2.rectangle(frame_rgb,(x1, y1),(x2, y2),(255,0,0),2)
+      out.write(cv2.cvtColor(frame_rgb,cv2.COLOR_RGB2BGR))
+    out.release()
+    os.remove(dataset + '_' + '{:.3f}'.format(iou_old) + '.avi')
 
 def run_pf(N, dataset, sigma, velocity, T):
   # Import images, ground truth
@@ -248,6 +267,10 @@ def run_pf(N, dataset, sigma, velocity, T):
   w_init = gt[0,2]
   h_init = gt[0,3]
   dim = initial_state.shape[0]
+
+  # print('Check IOU')
+  # estimate(np.array([initial_state, initial_state]), np.array([0.5,0.5]), gt[0,:], w_init, h_init)
+  # exit()
 
   # Create motion model matrices
   G = np.array([[1,T,0,0,0,0],[0,1,0,0,0,0],[0,0,1,T,0,0],[0,0,0,1,0,0],[0,0,0,0,1,0],[0,0,0,0,0,1]])
@@ -323,16 +346,8 @@ def run_pf(N, dataset, sigma, velocity, T):
         # display_image(frame_rgb, w_init, h_init, 'estimate', size=1.0, particles = state_estimate, weights = weights, t = 0.0001)
       index += 1
 
-  # Export video 
-  height,width,layers = frames_rgb[0].shape
-  size = (width,height)
-  out = cv2.VideoWriter(dataset+'.avi',cv2.VideoWriter_fourcc(*'DIVX'),15,size)
-  for frame_rgb,particle in zip(frames_rgb,estimation):
-    x1,x2,y1,y2 = get_rectangle(particle,w_init,h_init)
-    cv2.rectangle(frame_rgb,(x1, y1),(x2, y2),(255,0,0),2)
-    out.write(cv2.cvtColor(frame_rgb,cv2.COLOR_RGB2BGR))
-  out.release()
 
+  export_video(frames_rgb, estimation, dataset, w_init, h_init, '{:.3f}'.format(sum(IOU_avg)/len(IOU_avg)))
   print('Average IOU = {:.3f}'.format(sum(IOU_avg)/len(IOU_avg)))
   # for index,frame_rgb in enumerate(frames_rgb):
     # display_image(frame_rgb, w_init, h_init, 'IOU avg  = {:.3f}'.format(IOU_avg[index]), size=1.0, particles = estimation[index,:], t = 0.03)

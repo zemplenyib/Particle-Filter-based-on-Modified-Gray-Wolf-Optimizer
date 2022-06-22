@@ -20,9 +20,11 @@ def iou(bb1, bb2):
     """
     assert bb1['x1'] < bb1['x2']
     assert bb1['y1'] < bb1['y2']
-    assert bb2['x1'] < bb2['x2']
+    assert bb2['x1'] < bb2['x2'], str(bb2['x1']) + ';' + str(bb2['x2'])
     assert bb2['y1'] < bb2['y2']
 
+    # print('groundTruth' + '\n' + 'x1:' + str(bb1['x1']) + '\n' + 'x2:' + str(bb1['x2']) + '\n' + 'y1:' + str(bb1['y1']) + '\n' + 'y2:' + str(bb1['y2']))
+    # print('Particle' + '\n' + 'x1:' + str(bb2['x1']) + '\n' + 'x2:' + str(bb2['x2']) + '\n' + 'y1:' + str(bb2['y1']) + '\n' + 'y2:' + str(bb2['y2']))
     # determine the coordinates of the intersection rectangle
     x_left   = max(bb1['x1'], bb2['x1'])
     y_top    = max(bb1['y1'], bb2['y1'])
@@ -34,11 +36,14 @@ def iou(bb1, bb2):
 
     # The intersection of two axis-aligned bounding boxes is always an
     # axis-aligned bounding box
-    intersection_area = (x_right - x_left) * (y_bottom - y_top)
+    intersection_area = (x_right - x_left + 1) * (y_bottom - y_top + 1)
+    # print('x_right:' + str(x_right) + '\n' + 'x_left:' + str(x_left) + '\n' + 'y_bottom:' + str(y_bottom) + '\n' + 'y_top:' + str(y_top))
+    # print('intersection_area:' + str(intersection_area))
 
     # compute the area of both AABBs
     bb1_area = (bb1['x2'] - bb1['x1']+1) * (bb1['y2'] - bb1['y1']+1)
     bb2_area = (bb2['x2'] - bb2['x1']+1) * (bb2['y2'] - bb2['y1']+1)
+    # print('bb1_area:' + str(bb1_area) + '\n' + 'bb2_area:' + str(bb2_area))
 
     # compute the intersection over union by taking the intersection
     # area and dividing it by the sum of prediction + ground-truth
