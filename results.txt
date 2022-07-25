@@ -1,5 +1,5 @@
-with MGWO(1)		without MGWO	with MGWO(10)	with MGWO(10) average
-- Blurbody: 0.452	0.309		0.481		38.25
+with MGWO(1)		without MGWO	with MGWO(10)	
+- Blurbody: 0.452	0.309		0.481		
 - BlurOwl:  0.502	0.263		0.497
 - Box:	    0.231	0.164		0.140
 - Dog:      0.421	0.367		0.469	
