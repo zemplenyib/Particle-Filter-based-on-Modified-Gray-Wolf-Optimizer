@@ -15,11 +15,6 @@ from filterpy.monte_carlo import systematic_resample
 from filterpy.monte_carlo import residual_resample
 from filterpy.monte_carlo import stratified_resample
 
-# Constants
-ranges = [0, 256, 0, 256, 0, 256]
-epsilon = 0.000001
-mgwo_max_iter = 1
-
 def load_images_from_folder(folder):
   images = []
   filenames = []
@@ -38,12 +33,10 @@ def create_uniform_particles(x_range, y_range, w_range, h_range, N):
   particles[:, 3] = uniform(h_range[0], h_range[1], size=N)
   return particles
 
-def create_gaussian_particles(mean, std, N):
-  particles = np.empty((N, 4))
-  particles[:, 0] = mean[0] + (randn(N) * std[0])
-  particles[:, 1] = mean[1] + (randn(N) * std[1])
-  particles[:, 2] = mean[2] + (randn(N) * std[2])
-  particles[:, 3] = mean[3] + (randn(N) * std[3])
+def create_gaussian_particles(mean, std, N, dim):
+  particles = np.empty((N, dim))
+  for i in range(dim):
+    particles[:, i] = mean[i] + (randn(N) * std[i])
   return particles
 
 def create_clone_particles(initial,N,dim):
@@ -113,7 +106,7 @@ def update(frame, particles, weights, target_hist, w_init, h_init, normalize = '
     weights = weights / (np.sum(weights)+epsilon)
   return weights
 
-def estimate(particles, weights, groundTruth, w_init, h_init):
+def estimate(particles, weights, groundTruth, w_init, h_init, frame, target_hist):
   # State estimation by average of particles
   state_avg = np.sum(particles * weights[:,None], axis=0)
 
@@ -130,13 +123,17 @@ def estimate(particles, weights, groundTruth, w_init, h_init):
   # print('state_avg:' + str(state_avg))
   x1,x2,y1,y2 = get_rectangle(state_avg,w_init,h_init)
 
-  
   if x1 < x2:
     bb_avg = {'x1':x1, 'y1':y1, 'x2':x2, 'y2':y2}
   elif x1 > x2:
     bb_avg = {'x1':x2, 'y1':y1, 'x2':x1, 'y2':y2}
   else:
     bb_avg = {'x1':x1, 'y1':y1, 'x2':x2+1, 'y2':y2}
+
+  if not y1 < y2:
+    print(state_avg)
+    print(x1,y1,x2-x1,y2-y1)
+    print(groundTruth)
   # Bounding box of the solution using the largest weight
   # bb_lw  = {'x1':state_lw[0]-state_lw[2], 'y1':state_lw[1]-state_lw[3], 'x2':state_lw[0]+state_lw[2], 'y2':state_lw[1]+state_lw[3]}
 
@@ -173,6 +170,14 @@ def MGWO(N, dim, frame, target_hist, w_init, h_init, particles, weights, sigma, 
   # print(particles)
   # display_image(frame, w_init, h_init, 'MGWO0', size=1.0, particles = particles, weights = weights)
   
+  # In case of losing object
+  if not sum(weights)>0:
+    height,width,layers = frame.shape
+    particles = create_gaussian_particles([int(width/2), 1, int(height/2), 1, 1, 1], [100,5,100,5,5,1], len(particles), len(particles[0]))
+    weights = update(frame, particles, weights, target_hist, w_init, h_init)
+    print('Object lost')
+    # display_image(frame, w_init, h_init, 'Object Lost', size=1.0, particles = particles, weights = weights)
+
   a = 2
   particles_new = np.empty((N, dim))
   weights_new = np.empty((N, 1))
@@ -234,6 +239,11 @@ def MGWO(N, dim, frame, target_hist, w_init, h_init, particles, weights, sigma, 
         weights[i] = weights_new[i]
     # Update 'a' parameter
     a = 2 - 2*(np.sin(np.pi*t/max_iter/2))**2
+
+    # Display particles
+    # display_image(frame, w_init, h_init, 'MGWO_'+str(t+1), size=1.0, particles = particles, weights = weights)
+    # print(weights)
+
   weights = weights / (np.sum(weights)+epsilon)
   return particles, weights
 
@@ -267,7 +277,7 @@ def export_video(frames_rgb, estimation, dataset, w_init, h_init, iou):
     if iou_old != 0:
       os.remove(dataset + '_' + '{:.3f}'.format(iou_old) + '.avi')
 
-def run_pf(N, dataset, sigma, velocity, T):
+def run_pf(N, dataset, sigma, velocity, T, mgwo):
   # Import images, ground truth
   images, filenames, gt = import_data(dataset)
   initial_state = np.array([gt[0,0]+gt[0,2]/2,velocity[0],gt[0,1]+gt[0,3]/2,velocity[1], 0, 1])
@@ -313,7 +323,7 @@ def run_pf(N, dataset, sigma, velocity, T):
       # Create reference
       if index == 0:
         target_hist = get_histogram(frame_rgb, initial_state, w_init, h_init)
-        # display_image(frame_rgb, w_init, h_init, index, size=1.0, particles = particles, weights = weights)
+        display_image(frame_rgb, w_init, h_init, '', size=1.0, particles = particles, weights = weights)
 
       # Move particles
       particles = predict(particles,sigma,G,Q)
@@ -326,27 +336,20 @@ def run_pf(N, dataset, sigma, velocity, T):
       weights = update(frame_rgb, particles, weights, target_hist, w_init, h_init)
 
       # Apply Modified Gray Wolf Optimizer
-      frame_rgb = cv2.cvtColor(frame_bgr,cv2.COLOR_BGR2RGB)
-      particles, weights = MGWO(N = N, dim = dim, frame = frame_rgb, target_hist = target_hist, w_init = w_init, h_init = h_init, particles = particles, weights = weights, sigma = sigma[4], max_iter = mgwo_max_iter)
-      # display_image(frame_rgb, w_init, h_init, 'MGWO', size=1.0, particles = particles, weights = weights)
+      if mgwo:
+        frame_rgb = cv2.cvtColor(frame_bgr,cv2.COLOR_BGR2RGB)
+        particles, weights = MGWO(N = N, dim = dim, frame = frame_rgb, target_hist = target_hist, w_init = w_init, h_init = h_init, particles = particles, weights = weights, sigma = sigma[4], max_iter = mgwo_max_iter)
+        # display_image(frame_rgb, w_init, h_init, 'MGWO', size=1.0, particles = particles, weights = weights)
 
       # Estimate current state
-      state_estimate, IOU_avg_act = estimate(particles, weights, gt[index,:], w_init, h_init)
+      state_estimate, IOU_avg_act = estimate(particles, weights, gt[index,:], w_init, h_init, frame_rgb, target_hist)
       IOU_avg.append(IOU_avg_act)
-      estimation[index,:] = state_estimate
-
-      # frame_rgb = cv2.cvtColor(frame_bgr,cv2.COLOR_BGR2RGB)
-      # hist = get_histogram(frame_rgb,state_estimate, w_init, h_init, visualize = True)
-      # print(cv2.compareHist(target_hist, hist, cv2.HISTCMP_BHATTACHARYYA))
-      # print(state_estimate)
-      
+      estimation[index,:] = state_estimate      
 
       particles = resample(particles, weights, N)
-      # print('Resample')
-      # print(particles)
 
       if index % 1 == 0:
-        # frame_rgb = cv2.cvtColor(frame_bgr,cv2.COLOR_BGR2RGB)
+        frame_rgb = cv2.cvtColor(frame_bgr,cv2.COLOR_BGR2RGB)
         # display_image(frame_rgb, w_init, h_init, 'resample', size=1.0, particles = particles, weights = weights)
         frame_rgb = cv2.cvtColor(frame_bgr,cv2.COLOR_BGR2RGB)
         # display_image(frame_rgb, w_init, h_init, 'estimate', size=1.0, particles = state_estimate, weights = weights)
@@ -357,18 +360,47 @@ def run_pf(N, dataset, sigma, velocity, T):
   print('Average IOU = {:.3f}'.format(sum(IOU_avg)/len(IOU_avg)))
   # for index,frame_rgb in enumerate(frames_rgb):
     # display_image(frame_rgb, w_init, h_init, 'IOU avg  = {:.3f}'.format(IOU_avg[index]), size=1.0, particles = estimation[index,:])
+  return sum(IOU_avg)/len(IOU_avg)
 
 
-dataset = 'Box'
-sigma_x = 1.4
-sigma_y = 1.4
-sigma_theta = 0 #2.5
-sigma_s = 0.0001
-sigma_mgwo = 0.1
-velocity = [1,1]
+# Constants
+ranges = [0, 256, 0, 256, 0, 256]
+epsilon = 0.000001
+mgwo_max_iter = 10
+
+dataset = 'Surfer'
+sigma_x = 1.73 #1.4 #6 #1.4
+sigma_y = 0.64 #1.4 #6 #1.4
+sigma_theta = 1.96 #2.5
+sigma_s = 0.023 #0.025
+sigma_mgwo = 0.0458 #0.1 #0.05 #0.1
+velocity = [1,1] #[1,1]
+mgwo = False
 # Frame rate?
 T = 1
-run_pf(100, dataset, sigma = [sigma_x,sigma_y,sigma_theta,sigma_s, sigma_mgwo], velocity = velocity, T = T)
+
+run_pf(100, dataset, sigma = [sigma_x,sigma_y,sigma_theta,sigma_s, sigma_mgwo], velocity = velocity, T = T, mgwo = mgwo)
+# IoU = 0
+# for i in range(100):
+#   sigma_x_new = sigma_x + (random()*2-1)*0.3
+#   sigma_y_new = sigma_y + (random()*2-1)*0.3
+#   sigma_theta_new = sigma_theta + (random()*2-1)*0.3
+#   sigma_s_new = sigma_s + (random()*2-1)*0.005
+#   sigma_mgwo_new = sigma_mgwo + (random()*2-1)*0.03
+#   velocity_new = velocity + (random(2)*2-1)*0.3
+  
+  # IoU_new = run_pf(100, dataset, sigma = [sigma_x_new,sigma_y_new,sigma_theta_new,sigma_s_new, sigma_mgwo_new], velocity = velocity_new, T = T, mgwo = mgwo)
+
+  # if IoU_new > IoU:
+  #   IoU = IoU_new
+  #   sigma_x = sigma_x_new
+  #   sigma_y = sigma_y_new
+  #   sigma_theta = sigma_theta_new
+  #   sigma_s = sigma_s_new
+  #   sigma_mgwo = sigma_mgwo_new
+  #   velocity = velocity_new
+  #   print('sigma_x = ' + str(sigma_x) + '\n' + 'sigma_y = ' + str(sigma_y) + '\n' + 'sigma_theta = ' + str(sigma_theta) + '\n' + 'sigma_s = ' + str(sigma_s) + '\n' + 'sigma_mgwo = ' + str(sigma_mgwo) + '\n' + 'velocity = ' + str(velocity))
+  # print('Run ' + str(i) + ' complete.')
 
 # resample: particles = particle[best]
 

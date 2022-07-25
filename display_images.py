@@ -21,6 +21,7 @@ def get_rectangle(particle, w_init, h_init):
 # Function to display one image
 def display_image(img, w_init, h_init, title='', size=None, show_axis=False, particles = None, weights = None, t = None):
     # plt.gray()
+    img_disp = img.copy()
     if not show_axis:
       plt.axis('off')
 
@@ -30,12 +31,12 @@ def display_image(img, w_init, h_init, title='', size=None, show_axis=False, par
         if particles.shape == (6,):
             particle = particles
             x1,x2,y1,y2 = get_rectangle(particle,w_init,h_init)
-            cv2.rectangle(img,(x1, y1),(x2, y2),(255,0,0),2)
+            cv2.rectangle(img_disp,(x1, y1),(x2, y2),(255,0,0),2)
         else:
             for i,particle in enumerate(particles):
                 x1,x2,y1,y2 = get_rectangle(particle,w_init,h_init)
-                cv2.rectangle(img,(x1, y1),(x2, y2),(255,0,0),2)
-    h = plt.imshow(img, interpolation='none')
+                cv2.rectangle(img_disp,(x1, y1),(x2, y2),(255,0,0),2)
+    h = plt.imshow(img_disp, interpolation='none')
     if size:
         factor = 2
         dpi = h.figure.get_dpi()/size*factor
@@ -45,7 +46,7 @@ def display_image(img, w_init, h_init, title='', size=None, show_axis=False, par
         h.axes.set_position([0, 0, 1, 1])
 
         mngr = plt.get_current_fig_manager()
-        mngr.window.setGeometry(50,100,640, 545)
+        mngr.window.setGeometry(50,100,640,600)
 
         if show_axis:
             h.axes.set_xlim(-1, img.shape[1])

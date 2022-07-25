@@ -1,0 +1,11 @@
+with MGWO(1)		without MGWO	with MGWO(10)	with MGWO(10) average
+- Blurbody: 0.452	0.309		0.481		38.25
+- BlurOwl:  0.502	0.263		0.497
+- Box:	    0.231	0.164		0.140
+- Dog:      0.421	0.367		0.469	
+- Girl:     0.404	0.331		0.406
+- Jogging1: 0.306	0.440		0.483
+- Jogging2: 0.340	0.503		0.532		
+- Skating1: 0.414	0.403		0.382
+- Skating2: 0.375	0.386		0.369
+- Surfer:   0.134	0.053		0.179
