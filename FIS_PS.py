@@ -49,9 +49,6 @@ def get_histogram(frame, particle, w_init, h_init, visualize = False):
     # Crop roi from image
     x1,x2,y1,y2 = get_rectangle(particle,w_init,h_init)
     roi = frame[y1:y2,x1:x2]
-    # fig, ax = plt.subplots()
-    # plt.imshow(roi)
-    # plt.show()
   else:
     roi = frame
 
@@ -62,21 +59,6 @@ def get_histogram(frame, particle, w_init, h_init, visualize = False):
     fig, ax = plt.subplots()
     plt.imshow(roi)
     plt.show()
-    # histB = cv2.calcHist([roi],[2],None,[256],[0,256])
-    # histG = cv2.calcHist([roi],[1],None,[256],[0,256])
-    # histR = cv2.calcHist([roi],[0],None,[256],[0,256])
-    # fig, axs = plt.subplots(3)
-    # axs[0].plot(histB, color='b')
-    # axs[1].plot(histG, color='g')
-    # axs[2].plot(histR, color='r')
-    # plt.show()
-
-    # fig, ax = plt.subplots()
-    # plt.plot(hist)
-
-    # plt.show()
-
-
   return hist
 
 def predict(particles, std, G = None, Q = None):
@@ -95,12 +77,6 @@ def update(frame, particles, weights, target_hist, w_init, h_init, normalize = '
   for i,particle in enumerate(particles):
     particle_hist = get_histogram(frame,particle, w_init, h_init, visualize = False)
     weights[i] = 1-cv2.compareHist(target_hist, particle_hist, cv2.HISTCMP_BHATTACHARYYA) #cv2.HISTCMP_INTERSECT) #cv2.HISTCMP_CHISQR)
-    # print(weights[i])
-    # fig, ax = plt.subplots(2)
-    # ax[0].plot(target_hist)
-    # ax[1].plot(particle_hist)
-    # plt.title('in update')
-    # plt.show()
     
   if normalize:
     weights = weights / (np.sum(weights)+epsilon)
@@ -182,15 +158,9 @@ def MGWO(N, dim, frame, target_hist, w_init, h_init, particles, weights, sigma, 
   particles_new = np.empty((N, dim))
   weights_new = np.empty((N, 1))
 
-  # rng = np.random.default_rng()
-
   for t in range (max_iter):
     r1 = 0.5 + randn(N,3,dim)*sigma
     r2 = 0.5 + randn(N,3,dim)*sigma
-    # r1 = rng.random(N*3*dim)
-    # r2 = rng.random(N*3*dim)
-    # r1 = np.resize(r1,(N,3,dim))
-    # r2 = np.resize(r2,(N,3,dim))
     A = 2*a*r1-a
     C = 2*r2
     
@@ -200,35 +170,21 @@ def MGWO(N, dim, frame, target_hist, w_init, h_init, particles, weights, sigma, 
     alpha = ind[2]
     beta = ind[1]
     delta = ind[0]
-    # print('weights')
-    # print(weights)
-    # print('alpha,beta,delta')
-    # print(alpha,beta,delta)
 
     X_alpha = particles[alpha]
     X_beta = particles[beta]
     X_delta = particles[delta]
-    # print('Xes')
-    # print(X_alpha,X_beta,X_delta)
-
 
     for i, particle in enumerate(particles):
       D_alpha = np.absolute(C[i,0,:]*X_alpha - particle)
       D_beta = np.absolute(C[i,1,:]*X_beta - particle)
       D_delta = np.absolute(C[i,2,:]*X_delta - particle)
-      # print('D')
-      # print(D_alpha,D_beta,D_delta)
 
       X_1 = X_alpha - A[i,0,:]*D_alpha
       X_2 = X_beta - A[i,1,:]*D_beta
       X_3 = X_delta - A[i,2,:]*D_delta
 
-      # print('X')
-      # print(X_1,X_2,X_3)
-
       particles_new[i] = (X_1 + X_2 + X_3)/3
-    # print('new')
-    # print(particles_new)
     
     # Update particle if new solution is better
     weights     = update(frame, particles, weights, target_hist, w_init, h_init, normalize = False)
@@ -242,7 +198,6 @@ def MGWO(N, dim, frame, target_hist, w_init, h_init, particles, weights, sigma, 
 
     # Display particles
     # display_image(frame, w_init, h_init, 'MGWO_'+str(t+1), size=1.0, particles = particles, weights = weights)
-    # print(weights)
 
   weights = weights / (np.sum(weights)+epsilon)
   return particles, weights
@@ -281,15 +236,9 @@ def run_pf(N, dataset, sigma, velocity, T, mgwo):
   # Import images, ground truth
   images, filenames, gt = import_data(dataset)
   initial_state = np.array([gt[0,0]+gt[0,2]/2,velocity[0],gt[0,1]+gt[0,3]/2,velocity[1], 0, 1])
-  # print(gt[0,:])
-  # print(initial_state)
   w_init = gt[0,2]
   h_init = gt[0,3]
   dim = initial_state.shape[0]
-
-  # print('Check IOU')
-  # estimate(np.array([initial_state, initial_state]), np.array([0.5,0.5]), gt[0,:], w_init, h_init)
-  # exit()
 
   # Create motion model matrices
   G = np.array([[1,T,0,0,0,0],[0,1,0,0,0,0],[0,0,1,T,0,0],[0,0,0,1,0,0],[0,0,0,0,1,0],[0,0,0,0,0,1]])
@@ -323,13 +272,11 @@ def run_pf(N, dataset, sigma, velocity, T, mgwo):
       # Create reference
       if index == 0:
         target_hist = get_histogram(frame_rgb, initial_state, w_init, h_init)
-        display_image(frame_rgb, w_init, h_init, '', size=1.0, particles = particles, weights = weights)
+        # display_image(frame_rgb, w_init, h_init, '', size=1.0, particles = particles, weights = weights)
 
       # Move particles
       particles = predict(particles,sigma,G,Q)
       # display_image(frame_rgb, w_init, h_init, 'predict', size=1.0, particles = particles, weights = weights)
-      # print('Predict')
-      # print(particles)
 
       # Evaluate particles and calculate weights
       frame_rgb = cv2.cvtColor(frame_bgr,cv2.COLOR_BGR2RGB)
@@ -355,8 +302,8 @@ def run_pf(N, dataset, sigma, velocity, T, mgwo):
         # display_image(frame_rgb, w_init, h_init, 'estimate', size=1.0, particles = state_estimate, weights = weights)
       index += 1
 
-
-  export_video(frames_rgb, estimation, dataset, w_init, h_init, '{:.3f}'.format(sum(IOU_avg)/len(IOU_avg)))
+  # Export video with estimation
+  # export_video(frames_rgb, estimation, dataset, w_init, h_init, '{:.3f}'.format(sum(IOU_avg)/len(IOU_avg)))
   print('Average IOU = {:.3f}'.format(sum(IOU_avg)/len(IOU_avg)))
   # for index,frame_rgb in enumerate(frames_rgb):
     # display_image(frame_rgb, w_init, h_init, 'IOU avg  = {:.3f}'.format(IOU_avg[index]), size=1.0, particles = estimation[index,:])
@@ -368,46 +315,14 @@ ranges = [0, 256, 0, 256, 0, 256]
 epsilon = 0.000001
 mgwo_max_iter = 10
 
-dataset = 'Surfer'
+dataset = 'BlurBody'
 sigma_x = 1.73 #1.4 #6 #1.4
 sigma_y = 0.64 #1.4 #6 #1.4
 sigma_theta = 1.96 #2.5
 sigma_s = 0.023 #0.025
 sigma_mgwo = 0.0458 #0.1 #0.05 #0.1
 velocity = [1,1] #[1,1]
-mgwo = False
-# Frame rate?
+mgwo = True
 T = 1
 
 run_pf(100, dataset, sigma = [sigma_x,sigma_y,sigma_theta,sigma_s, sigma_mgwo], velocity = velocity, T = T, mgwo = mgwo)
-# IoU = 0
-# for i in range(100):
-#   sigma_x_new = sigma_x + (random()*2-1)*0.3
-#   sigma_y_new = sigma_y + (random()*2-1)*0.3
-#   sigma_theta_new = sigma_theta + (random()*2-1)*0.3
-#   sigma_s_new = sigma_s + (random()*2-1)*0.005
-#   sigma_mgwo_new = sigma_mgwo + (random()*2-1)*0.03
-#   velocity_new = velocity + (random(2)*2-1)*0.3
-  
-  # IoU_new = run_pf(100, dataset, sigma = [sigma_x_new,sigma_y_new,sigma_theta_new,sigma_s_new, sigma_mgwo_new], velocity = velocity_new, T = T, mgwo = mgwo)
-
-  # if IoU_new > IoU:
-  #   IoU = IoU_new
-  #   sigma_x = sigma_x_new
-  #   sigma_y = sigma_y_new
-  #   sigma_theta = sigma_theta_new
-  #   sigma_s = sigma_s_new
-  #   sigma_mgwo = sigma_mgwo_new
-  #   velocity = velocity_new
-  #   print('sigma_x = ' + str(sigma_x) + '\n' + 'sigma_y = ' + str(sigma_y) + '\n' + 'sigma_theta = ' + str(sigma_theta) + '\n' + 'sigma_s = ' + str(sigma_s) + '\n' + 'sigma_mgwo = ' + str(sigma_mgwo) + '\n' + 'velocity = ' + str(velocity))
-  # print('Run ' + str(i) + ' complete.')
-
-# resample: particles = particle[best]
-
-# HISTOGRAM TEST
-# img = cv2.imread('D:/BME/ETSETB/Advanced_Signal_Processing/Project/FIS_PS_new/Datasets/Solid_blue.png',cv2.IMREAD_COLOR)
-# img = cv2.cvtColor(img,cv2.COLOR_BGR2RGB)
-# get_histogram(img, None, 0, 0, visualize = True)
-# fig, ax = plt.subplots()
-# plt.imshow(img)
-# plt.show()

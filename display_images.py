@@ -20,7 +20,6 @@ def get_rectangle(particle, w_init, h_init):
 
 # Function to display one image
 def display_image(img, w_init, h_init, title='', size=None, show_axis=False, particles = None, weights = None, t = None):
-    # plt.gray()
     img_disp = img.copy()
     if not show_axis:
       plt.axis('off')
